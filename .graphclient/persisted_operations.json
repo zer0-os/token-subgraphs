@@ -1,0 +1,3 @@
+{
+  "e7981cd7b03bcef485a54f09b57cf99a6d894977968ab85406f0334ccec7ccb0": "query ApprovalsQuery($first: Int, $lastId: Bytes) {\n  approvals(first: $first, where: {id_gt: $lastId}) {\n    id\n    owner\n    spender\n    value\n  }\n}"
+}

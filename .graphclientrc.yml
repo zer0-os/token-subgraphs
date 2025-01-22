@@ -1,0 +1,11 @@
+sources:
+  - name: wild
+    handler:
+      graphql:
+        endpoint: https://api.studio.thegraph.com/query/64879/wild-mainnet/version/latest
+    transforms:
+      - autoPagination:
+          validateSchema: true
+          limitOfRecords: 1000
+documents:
+  - ./queries.graphql

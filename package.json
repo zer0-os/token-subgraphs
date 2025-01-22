@@ -1,0 +1,19 @@
+{
+  "name": "token-subgraphs",
+  "version": "1.0.0",
+  "description": "Subgraphs for deployed ERC20 tokens",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@apollo/client": "^3.12.6",
+    "@graphprotocol/client-cli": "^3.0.7",
+    "@graphprotocol/graph-cli": "^0.94.0",
+    "graphql": "^16.10.0",
+    "react": "^19.0.0"
+  }
+}

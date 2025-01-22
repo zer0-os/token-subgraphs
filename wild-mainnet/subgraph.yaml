@@ -1,0 +1,47 @@
+specVersion: 1.0.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: WILDToken
+    network: mainnet
+    source:
+      address: "0x2a3bFF78B79A009976EeA096a51A948a3dC00e34"
+      abi: WILDToken
+      startBlock: 12389025
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Approval
+        - AuthorizedSnapshotter
+        - DeauthorizedSnapshotter
+        - OwnershipTransferred
+        - Paused
+        - Snapshot
+        - Transfer
+        - Unpaused
+      abis:
+        - name: WILDToken
+          file: ./abis/WILDToken.json
+      eventHandlers:
+        - event: Approval(indexed address,indexed address,uint256)
+          handler: handleApproval
+        - event: AuthorizedSnapshotter(address)
+          handler: handleAuthorizedSnapshotter
+        - event: DeauthorizedSnapshotter(address)
+          handler: handleDeauthorizedSnapshotter
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: Paused(address)
+          handler: handlePaused
+        - event: Snapshot(uint256)
+          handler: handleSnapshot
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
+        - event: Unpaused(address)
+          handler: handleUnpaused
+      file: ./src/wild-token.ts
