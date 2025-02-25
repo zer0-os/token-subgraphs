@@ -15,7 +15,6 @@ export const createClient = (apiUrl: string) => {
 }
 
 
-
 export const sendQuery = async <T extends Object>(
   client: ApolloClient<NormalizedCacheObject>,
   query: string,
@@ -24,7 +23,7 @@ export const sendQuery = async <T extends Object>(
   const response = await client.query({
     query: gql(query),
     variables: args
-  })
+  });
 
   return response;
 }

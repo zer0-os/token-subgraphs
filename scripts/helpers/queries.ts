@@ -15,21 +15,14 @@ export const approvalsQuery = `
 `
 
 export const accountInfoQuery = `
-  query($first: Int) {
+  query($first: Int, $lastId: String) {
     accounts(
-    first: $first,
-    where: {totalWildDeposits_gt: 1}
+      first: $first,
+      where: {id_gt: $lastId},
+      orderBy: id,
+      orderDirection: asc
     ) {
       id
-      totalStakedWild
-      totalWildDeposits
-      deposits {
-        id
-        tokenAmount
-        pool {
-          id
-        }
-      }
     }
   }
 `
