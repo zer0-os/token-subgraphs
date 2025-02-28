@@ -9,7 +9,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "compile": "hardhat compile",
     "typechain": "hardhat typechain",
-    "make-type": "yarn compile && mkdir -p artifacts/contracts/MockCorePool.sol && cp scripts/helpers/pool_abi.json /artifacts/contracts/MockCorePool.sol/MockCorePool.json"
+    "make-type": "yarn compile && mkdir -p artifacts/contracts/MockCorePool.sol && cp scripts/helpers/pool_abi.json /artifacts/contracts/MockCorePool.sol/MockCorePool.json",
+    "make-type-lp": "yarn compile && mkdir -p artifacts/contracts/UniswapV2ERC20.sol && cp scripts/helpers/uniswap_v2_token_abi.json /artifacts/contracts/UniswapV2ERC20.sol/UniswapV2ERC20.json"
   },
   "keywords": [],
   "author": "",

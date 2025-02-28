@@ -4,4 +4,4 @@ node_modules
 typechain
 .env
 
-output.txt
+output

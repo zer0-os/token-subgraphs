@@ -4,5 +4,5 @@ export interface ApprovalsQueryArgs extends BaseArgs {
 
 export interface BaseArgs {
   first: number;
-  lastId: string;
+  skip: number;
 }

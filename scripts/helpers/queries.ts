@@ -15,12 +15,10 @@ export const approvalsQuery = `
 `
 
 export const accountInfoQuery = `
-  query($first: Int, $lastId: String) {
+  query($first: Int, $skip: Int) {
     accounts(
       first: $first,
-      where: {id_gt: $lastId},
-      orderBy: id,
-      orderDirection: asc
+      skip: $skip
     ) {
       id
     }
