@@ -12,7 +12,7 @@ export const approvalsQuery = `
       value
     }
   }
-`
+`;
 
 export const accountInfoQuery = `
   query($first: Int, $skip: Int) {
@@ -23,7 +23,7 @@ export const accountInfoQuery = `
       id
     }
   }
-`
+`;
 
 export const depositsQuery = `
   query($first: Int) {
@@ -34,4 +34,4 @@ export const depositsQuery = `
       }
     }
   }
-`
+`;

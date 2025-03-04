@@ -3,8 +3,8 @@
 require("dotenv").config();
 
 import "@nomicfoundation/hardhat-ethers";
-import "@nomicfoundation/hardhat-toolbox";
 import "@openzeppelin/hardhat-upgrades";
+import "@typechain/hardhat";
 
 import { HardhatUserConfig } from "hardhat/types";
 
@@ -42,9 +42,6 @@ const config : HardhatUserConfig = {
   },
   mocha: {
     timeout: 5000000,
-  },
-  gasReporter: {
-    enabled: false,
   },
   networks: {
     mainnet: {
