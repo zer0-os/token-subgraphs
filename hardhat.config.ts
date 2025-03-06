@@ -44,6 +44,11 @@ const config : HardhatUserConfig = {
     timeout: 5000000,
   },
   networks: {
+    hardhat: {
+      forking: {
+        url: `${process.env.MAINNET_RPC_URL}`
+      }
+    },
     mainnet: {
       url: `${process.env.MAINNET_RPC_URL}`,
       accounts: [

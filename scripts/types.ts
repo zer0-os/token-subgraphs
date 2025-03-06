@@ -1,7 +1,10 @@
 export interface AccountAmount {
   user : string;
-  amountStaked : string;
-  pendingYieldRewards : string;
+  amountStakedWILD : string;
+  amountStakedWILDYield : string;
+  amountStakedLP : string;
+  pendingYieldRewardsWILD : string;
+  pendingYieldRewardsLP : string;
 }
 
 export interface UserStake {
@@ -9,9 +12,7 @@ export interface UserStake {
   yieldAmount : bigint;
 }
 
-export interface ResultAmounts {
-  wildAmountsArr : Array<AccountAmount>;
-  lpAmountsArr : Array<AccountAmount>;
+export interface Totals {
   totalWildStaked : bigint;
   totalWildYield : bigint;
   totalWildPendingRewards : bigint;

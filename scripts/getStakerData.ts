@@ -11,7 +11,7 @@ import { Contract } from "ethers";
 import * as hre from "hardhat";
 import * as fs from "fs";
 import * as artifact from "./helpers/uniswap_v2_token_abi.json";
-import { AccountAmount, ResultAmounts, UserStake } from "./types";
+import { AccountAmount, Totals, UserStake } from "./types";
 import { expect } from "chai";
 import { LP_POOL_ADDRESS, LP_TOKEN_ADDRESS, WILD_POOL_ADDRESS, WILD_TOKEN_ADDRESS } from "./helpers/constants";
 
@@ -24,14 +24,23 @@ const getStakesByUser = async (
   let amount = 0n;
   let yieldAmount = 0n;
 
+  // Parse all deposits created by staking. These deposits are updated
+  // when unstaking, so total sum of deposits always represents amount currently staked
   for (let i = 0; i < depositsLength; i++) {
     const deposit = await pool.getDeposit(account, i);
     if (deposit.isYield) {
+      // Yield deposits are deposits from actions that call `processRewards` and so aren't
+      // actually represented by ERC20 tokens in the contract. Just a record of the yield, like an I.O.U.
       yieldAmount += deposit.tokenAmount;
     } else {
       amount += deposit.tokenAmount;
     }
   }
+
+  const tokenAmount = (await pool.users(account)).tokenAmount;
+
+  // `tokenAmount` should always equal the sum of `amount` and `yieldAmount`
+  expect(tokenAmount).to.eq(amount + yieldAmount);
 
   return { amount, yieldAmount };
 };
@@ -40,9 +49,9 @@ const getStakesInPool = async (
   accounts : Array<string>,
   wildPool : MockCorePool,
   lpPool : MockCorePool,
-) : Promise<ResultAmounts> => {
-  const wildAmountsArr = new Array<AccountAmount>();
-  const lpAmountsArr = new Array<AccountAmount>();
+) : Promise<[Totals, Map<string, AccountAmount>]> => {
+
+  const stakers = new Map<string, AccountAmount>();
 
   let totalWildStaked = 0n;
   let totalWildYield = 0n;
@@ -52,6 +61,9 @@ const getStakesInPool = async (
 
   let totalWildPendingRewards = 0n;
   let totalLPPendingRewards = 0n;
+
+  const stakersThatExited = new Array<string>();
+  const stakersThatExitedLP = new Array<string>();
 
   for (let i = 0; i< accounts.length; i++) {
     const account = accounts[i];
@@ -71,47 +83,48 @@ const getStakesInPool = async (
       lpAmounts,
     ] = await Promise.all(promises) as unknown as [bigint, bigint, UserStake, UserStake];
 
-    if (wildAmounts.amount > 0n) {
-      wildAmountsArr.push(
-        {
-          user: account,
-          amountStaked: wildAmounts.amount.toString(),
-          pendingYieldRewards: pendingYieldRewardsWild.toString(),
-        },
-      );
-
-      totalWildStaked += wildAmounts.amount;
-      totalWildYield += wildAmounts.yieldAmount;
-      totalWildPendingRewards += pendingYieldRewardsWild;
+    if (!stakers.has(account)) {
+      stakers.set(account, {
+        user: account,
+        amountStakedWILD: wildAmounts.amount.toString(),
+        amountStakedWILDYield: wildAmounts.yieldAmount.toString(),
+        amountStakedLP: lpAmounts.amount.toString(),
+        pendingYieldRewardsWILD: pendingYieldRewardsWild.toString(),
+        pendingYieldRewardsLP: pendingYieldRewardsLP.toString(),
+      });
+    } else {
+      // Should never get here
+      console.log(`Duplicate account found: ${account}`);
     }
 
-    if (lpAmounts.amount > 0n) {
-      lpAmountsArr.push(
-        {
-          user: account,
-          amountStaked: lpAmounts.amount.toString(),
-          pendingYieldRewards: pendingYieldRewardsLP.toString(),
-        },
-      );
+    totalWildStaked += wildAmounts.amount;
+    totalWildYield += wildAmounts.yieldAmount;
+    totalWildPendingRewards += pendingYieldRewardsWild;
 
-      totalLPStaked += lpAmounts.amount;
-      totalWildLPYield += lpAmounts.yieldAmount;
-      totalLPPendingRewards += pendingYieldRewardsLP;
-    }
+    totalLPStaked += lpAmounts.amount;
+    totalWildLPYield += lpAmounts.yieldAmount;
+    totalLPPendingRewards += pendingYieldRewardsLP;
 
     console.log("Processed: ", i);
   }
 
-  return {
-    wildAmountsArr,
-    lpAmountsArr,
-    totalWildStaked,
-    totalWildYield,
-    totalWildPendingRewards,
-    totalLPStaked,
-    totalWildLPYield,
-    totalLPPendingRewards,
-  };
+  // verify this on chain
+  console.log("# Stakers that exited Wild Pool: ", stakersThatExited.length);
+  console.log("# Stakers that exited LP Pool: ", stakersThatExitedLP.length);
+  fs.writeFileSync("output/stakersThatExited.json", JSON.stringify(stakersThatExited, undefined, 2));
+  fs.writeFileSync("output/stakersThatExitedLP.json", JSON.stringify(stakersThatExitedLP, undefined, 2));
+
+  return [
+    {
+      totalWildStaked,
+      totalWildYield,
+      totalWildPendingRewards,
+      totalLPStaked,
+      totalWildLPYield,
+      totalLPPendingRewards,
+    } as Totals,
+    stakers,
+  ]
 };
 
 const getStakers = async () => {
@@ -180,8 +193,9 @@ const main = async () => {
   console.log("Total # of stakers: ", stakers.length);
   console.log("Starting...");
 
-  const results = await getStakesInPool(
+  const [ results, stakersMap ] = await getStakesInPool(
     stakers,
+    // stakers.slice(0,2),
     wildPool,
     lpPool,
   );
@@ -215,8 +229,7 @@ const main = async () => {
   };
 
   fs.writeFileSync("output/totals.json", JSON.stringify(output, undefined, 2));
-  fs.writeFileSync("output/wildStakes.json", JSON.stringify(results.wildAmountsArr, undefined, 2));
-  fs.writeFileSync("output/lpStakes.json", JSON.stringify(results.lpAmountsArr, undefined, 2));
+  fs.writeFileSync("output/allStakers.json", JSON.stringify(Array.from(stakersMap), undefined, 2));
 };
 
 main().then(() => process.exit(0))
