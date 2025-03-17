@@ -182,7 +182,7 @@ const main = async () => {
   let stakers = Array<string>();
 
   // When we decide on a snapshot timestamp, get this list again to be sure we have latest
-  if (!fs.existsSync("output/stakers.json")) {
+  if (fs.existsSync("output/stakers.json")) {
     stakers = await getStakers();
     fs.writeFileSync("output/stakers.json", JSON.stringify(stakers, undefined, 2));
     console.log("Total # of stakers: ", stakers.length);
@@ -195,10 +195,26 @@ const main = async () => {
 
   const [ results, stakersMap ] = await getStakesInPool(
     stakers,
-    // stakers.slice(0,2),
+    // stakers.slice(0,5),
     wildPool,
     lpPool,
   );
+
+  // user address, wild amount, LP amount
+  type MerkleData = [string, string, string];
+  const merkleData: Array<MerkleData> = [];
+
+  // Turn into merkle data format needed
+  for (const entry of stakersMap.entries()) {
+    const account = entry[1];
+
+    const wildAmountOwed = BigInt(account.amountStakedWILD) + BigInt(account.amountStakedWILDYield) + BigInt(account.pendingYieldRewardsWILD);
+    const lpAmountOwed = BigInt(account.amountStakedLP);
+
+    if (wildAmountOwed > 0n || lpAmountOwed > 0n) {
+      merkleData.push([account.user, wildAmountOwed.toString(), lpAmountOwed.toString()]);
+    }
+  }
 
   const balanceOfWildPool = await wildToken.balanceOf(await wildPool.getAddress());
   const balanceOfLpPool = await lpToken.balanceOf(await lpPool.getAddress());
@@ -228,6 +244,8 @@ const main = async () => {
     balanceOfLpPool: balanceOfLpPool.toString(),
   };
 
+  // Output merkle data as well as totals for verification
+  fs.writeFileSync("output/merkle_data.json", JSON.stringify(merkleData, undefined, 2));
   fs.writeFileSync("output/totals.json", JSON.stringify(output, undefined, 2));
   fs.writeFileSync("output/allStakers.json", JSON.stringify(Array.from(stakersMap), undefined, 2));
 };
