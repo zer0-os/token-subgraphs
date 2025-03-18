@@ -195,7 +195,6 @@ const main = async () => {
 
   const [ results, stakersMap ] = await getStakesInPool(
     stakers,
-    // stakers.slice(0,5),
     wildPool,
     lpPool,
   );
