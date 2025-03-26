@@ -65,7 +65,7 @@ const getStakesInPool = async (
   const stakersThatExited = new Array<string>();
   const stakersThatExitedLP = new Array<string>();
 
-  for (let i = 0; i< accounts.length; i++) {
+  for (let i = 0; i < accounts.length; i++) {
     const account = accounts[i];
 
     const promises = [
@@ -150,8 +150,8 @@ const getStakers = async () => {
 
   const stakers : Array<string> = [];
 
-  while(response.data.accounts.length > 0) {
-    for(const account of response.data.accounts) {
+  while (response.data.accounts.length > 0) {
+    for (const account of response.data.accounts) {
       stakers.push(account.id);
     }
 
@@ -193,7 +193,7 @@ const main = async () => {
   console.log("Total # of stakers: ", stakers.length);
   console.log("Starting...");
 
-  const [ results, stakersMap ] = await getStakesInPool(
+  const [results, stakersMap] = await getStakesInPool(
     stakers,
     wildPool,
     lpPool,
@@ -207,7 +207,12 @@ const main = async () => {
   for (const entry of stakersMap.entries()) {
     const account = entry[1];
 
-    const wildAmountOwed = BigInt(account.amountStakedWILD) + BigInt(account.amountStakedWILDYield) + BigInt(account.pendingYieldRewardsWILD);
+    const wildAmountOwed =
+      BigInt(account.amountStakedWILD) +
+      BigInt(account.amountStakedWILDYield) +
+      BigInt(account.pendingYieldRewardsWILD) +
+      BigInt(account.pendingYieldRewardsLP);
+
     const lpAmountOwed = BigInt(account.amountStakedLP);
 
     if (wildAmountOwed > 0n || lpAmountOwed > 0n) {
