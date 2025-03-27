@@ -92,18 +92,17 @@ const getStakesInPool = async (
         pendingYieldRewardsWILD: pendingYieldRewardsWild.toString(),
         pendingYieldRewardsLP: pendingYieldRewardsLP.toString(),
       });
+
+      totalWildStaked += wildAmounts.amount;
+      totalWildYield += wildAmounts.yieldAmount;
+      totalWildPendingRewards += pendingYieldRewardsWild;
+
+      totalLPStaked += lpAmounts.amount;
+      totalWildLPYield += lpAmounts.yieldAmount;
+      totalLPPendingRewards += pendingYieldRewardsLP;
     } else {
-      // Should never get here
-      console.log(`Duplicate account found: ${account}`);
+      throw Error(`Duplicate account found: ${account}`)
     }
-
-    totalWildStaked += wildAmounts.amount;
-    totalWildYield += wildAmounts.yieldAmount;
-    totalWildPendingRewards += pendingYieldRewardsWild;
-
-    totalLPStaked += lpAmounts.amount;
-    totalWildLPYield += lpAmounts.yieldAmount;
-    totalLPPendingRewards += pendingYieldRewardsLP;
 
     console.log("Processed: ", i);
   }
