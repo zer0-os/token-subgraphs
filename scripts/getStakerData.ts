@@ -12,7 +12,6 @@ import * as hre from "hardhat";
 import * as fs from "fs";
 import * as artifact from "./helpers/uniswap_v2_token_abi.json";
 import { AccountAmount, Totals, UserStake } from "./types";
-import { expect } from "chai";
 import { LP_POOL_ADDRESS, LP_TOKEN_ADDRESS, WILD_POOL_ADDRESS, WILD_TOKEN_ADDRESS } from "./helpers/constants";
 import assert from "assert";
 
@@ -41,7 +40,7 @@ const getStakesByUser = async (
   const tokenAmount = (await pool.users(account)).tokenAmount;
 
   // `tokenAmount` should always equal the sum of `amount` and `yieldAmount`
-  expect(tokenAmount).to.eq(amount + yieldAmount);
+  assert.equal(tokenAmount, amount + yieldAmount);
 
   return { amount, yieldAmount };
 };
@@ -221,12 +220,12 @@ const main = async () => {
   const balanceOfLpPool = await lpToken.balanceOf(await lpPool.getAddress());
 
   // Validate the aggregate values against the contract balances
-  expect(balanceOfWildPool).to.eq(results.totalWildStaked);
-  expect(balanceOfLpPool).to.eq(results.totalLPStaked);
+  assert.equal(balanceOfWildPool, results.totalWildStaked);
+  assert.equal(balanceOfLpPool, results.totalLPStaked);
 
   // As the WILD from LP reward claims are restaked in the WILD pool,
   // this value should always be 0
-  assert(results.totalLPYield == 0n);
+  assert.equal(results.totalLPYield, 0n);
 
   console.log("Total Wild Staked: ", results.totalWildStaked.toString());
   console.log("Total Wild Yield: ", results.totalWildYield.toString());
