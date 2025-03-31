@@ -62,9 +62,6 @@ const getStakesInPool = async (
   let totalWildPendingRewards = 0n;
   let totalLPPendingRewards = 0n;
 
-  const stakersThatExited = new Array<string>();
-  const stakersThatExitedLP = new Array<string>();
-
   for (let i = 0; i < accounts.length; i++) {
     const account = accounts[i];
 
@@ -106,12 +103,6 @@ const getStakesInPool = async (
 
     console.log("Processed: ", i);
   }
-
-  // verify this on chain
-  console.log("# Stakers that exited Wild Pool: ", stakersThatExited.length);
-  console.log("# Stakers that exited LP Pool: ", stakersThatExitedLP.length);
-  fs.writeFileSync("output/stakersThatExited.json", JSON.stringify(stakersThatExited, undefined, 2));
-  fs.writeFileSync("output/stakersThatExitedLP.json", JSON.stringify(stakersThatExitedLP, undefined, 2));
 
   return [
     {
@@ -181,7 +172,7 @@ const main = async () => {
   let stakers = Array<string>();
 
   // When we decide on a snapshot timestamp, get this list again to be sure we have latest
-  if (fs.existsSync("output/stakers.json")) {
+  if (!fs.existsSync("output/stakers.json")) { // TODO local file writes will be replaced when DB connection is setup
     stakers = await getStakers();
     fs.writeFileSync("output/stakers.json", JSON.stringify(stakers, undefined, 2));
     console.log("Total # of stakers: ", stakers.length);
