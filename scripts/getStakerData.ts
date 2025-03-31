@@ -211,6 +211,9 @@ const main = async () => {
 
     if (wildAmountOwed > 0n || lpAmountOwed > 0n) {
       merkleData.push([account.user, wildAmountOwed.toString(), lpAmountOwed.toString()]);
+    } else {
+      // Remove any stakers who have 0 owed balances to keep data in sync
+      stakersMap.delete(account.user);
     }
   }
 
