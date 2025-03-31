@@ -17,6 +17,6 @@ export interface Totals {
   totalWildYield : bigint;
   totalWildPendingRewards : bigint;
   totalLPStaked : bigint;
-  totalWildLPYield : bigint;
+  totalLPYield : bigint;
   totalLPPendingRewards : bigint;
 }

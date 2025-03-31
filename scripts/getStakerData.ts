@@ -14,6 +14,7 @@ import * as artifact from "./helpers/uniswap_v2_token_abi.json";
 import { AccountAmount, Totals, UserStake } from "./types";
 import { expect } from "chai";
 import { LP_POOL_ADDRESS, LP_TOKEN_ADDRESS, WILD_POOL_ADDRESS, WILD_TOKEN_ADDRESS } from "./helpers/constants";
+import assert from "assert";
 
 
 const getStakesByUser = async (
@@ -57,7 +58,7 @@ const getStakesInPool = async (
   let totalWildYield = 0n;
 
   let totalLPStaked = 0n;
-  let totalWildLPYield = 0n;
+  let totalLPYield = 0n;
 
   let totalWildPendingRewards = 0n;
   let totalLPPendingRewards = 0n;
@@ -95,7 +96,7 @@ const getStakesInPool = async (
       totalWildPendingRewards += pendingYieldRewardsWild;
 
       totalLPStaked += lpAmounts.amount;
-      totalWildLPYield += lpAmounts.yieldAmount;
+      totalLPYield += lpAmounts.yieldAmount;
       totalLPPendingRewards += pendingYieldRewardsLP;
     } else {
       throw Error(`Duplicate account found: ${account}`)
@@ -110,7 +111,7 @@ const getStakesInPool = async (
       totalWildYield,
       totalWildPendingRewards,
       totalLPStaked,
-      totalWildLPYield,
+      totalLPYield,
       totalLPPendingRewards,
     } as Totals,
     stakers,
@@ -217,13 +218,17 @@ const main = async () => {
   expect(balanceOfWildPool).to.eq(results.totalWildStaked);
   expect(balanceOfLpPool).to.eq(results.totalLPStaked);
 
+  // As the WILD from LP reward claims are restaked in the WILD pool,
+  // this value should always be 0
+  assert(results.totalLPYield == 0n);
+
   console.log("Total Wild Staked: ", results.totalWildStaked.toString());
   console.log("Total Wild Yield: ", results.totalWildYield.toString());
   console.log("Total Wild Pending Rewards: ", results.totalWildPendingRewards.toString());
   console.log("Balance of Wild Pool: ", balanceOfWildPool.toString());
 
   console.log("Total LP Staked: ", results.totalLPStaked.toString());
-  console.log("Total LP Yield: ", results.totalWildLPYield.toString());
+  console.log("Total LP Yield: ", results.totalLPYield.toString());
   console.log("Total LP Rewards: ", results.totalLPPendingRewards.toString());
   console.log("Balance of LP Pool: ", balanceOfLpPool.toString());
 
@@ -233,7 +238,7 @@ const main = async () => {
     totalWildPendingRewards: results.totalWildPendingRewards.toString(),
     balanceOfWildPool: balanceOfWildPool.toString(),
     totalLPStaked: results.totalLPStaked.toString(),
-    totalWildLPYield: results.totalWildLPYield.toString(),
+    totalLPYield: results.totalLPYield.toString(),
     totalLPPendingRewards: results.totalLPPendingRewards.toString(),
     balanceOfLpPool: balanceOfLpPool.toString(),
   };
