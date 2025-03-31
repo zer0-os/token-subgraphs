@@ -139,6 +139,9 @@ const getStakers = async () => {
     },
   );
 
+  // If there is an error in the query process, halt the execution
+  if (response.error) throw response.error;
+
   const stakers : Array<string> = [];
 
   while (response.data.accounts.length > 0) {
