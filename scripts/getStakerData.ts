@@ -12,8 +12,8 @@ import * as hre from "hardhat";
 import * as fs from "fs";
 import * as artifact from "./helpers/uniswap_v2_token_abi.json";
 import { AccountAmount, Totals, UserStake } from "./types";
-import { expect } from "chai";
 import { LP_POOL_ADDRESS, LP_TOKEN_ADDRESS, WILD_POOL_ADDRESS, WILD_TOKEN_ADDRESS } from "./helpers/constants";
+import assert from "assert";
 
 
 const getStakesByUser = async (
@@ -40,7 +40,7 @@ const getStakesByUser = async (
   const tokenAmount = (await pool.users(account)).tokenAmount;
 
   // `tokenAmount` should always equal the sum of `amount` and `yieldAmount`
-  expect(tokenAmount).to.eq(amount + yieldAmount);
+  assert.equal(tokenAmount, amount + yieldAmount);
 
   return { amount, yieldAmount };
 };
@@ -57,15 +57,12 @@ const getStakesInPool = async (
   let totalWildYield = 0n;
 
   let totalLPStaked = 0n;
-  let totalWildLPYield = 0n;
+  let totalLPYield = 0n;
 
   let totalWildPendingRewards = 0n;
   let totalLPPendingRewards = 0n;
 
-  const stakersThatExited = new Array<string>();
-  const stakersThatExitedLP = new Array<string>();
-
-  for (let i = 0; i< accounts.length; i++) {
+  for (let i = 0; i < accounts.length; i++) {
     const account = accounts[i];
 
     const promises = [
@@ -92,27 +89,20 @@ const getStakesInPool = async (
         pendingYieldRewardsWILD: pendingYieldRewardsWild.toString(),
         pendingYieldRewardsLP: pendingYieldRewardsLP.toString(),
       });
+
+      totalWildStaked += wildAmounts.amount;
+      totalWildYield += wildAmounts.yieldAmount;
+      totalWildPendingRewards += pendingYieldRewardsWild;
+
+      totalLPStaked += lpAmounts.amount;
+      totalLPYield += lpAmounts.yieldAmount;
+      totalLPPendingRewards += pendingYieldRewardsLP;
     } else {
-      // Should never get here
-      console.log(`Duplicate account found: ${account}`);
+      throw Error(`Duplicate account found: ${account}`)
     }
-
-    totalWildStaked += wildAmounts.amount;
-    totalWildYield += wildAmounts.yieldAmount;
-    totalWildPendingRewards += pendingYieldRewardsWild;
-
-    totalLPStaked += lpAmounts.amount;
-    totalWildLPYield += lpAmounts.yieldAmount;
-    totalLPPendingRewards += pendingYieldRewardsLP;
 
     console.log("Processed: ", i);
   }
-
-  // verify this on chain
-  console.log("# Stakers that exited Wild Pool: ", stakersThatExited.length);
-  console.log("# Stakers that exited LP Pool: ", stakersThatExitedLP.length);
-  fs.writeFileSync("output/stakersThatExited.json", JSON.stringify(stakersThatExited, undefined, 2));
-  fs.writeFileSync("output/stakersThatExitedLP.json", JSON.stringify(stakersThatExitedLP, undefined, 2));
 
   return [
     {
@@ -120,7 +110,7 @@ const getStakesInPool = async (
       totalWildYield,
       totalWildPendingRewards,
       totalLPStaked,
-      totalWildLPYield,
+      totalLPYield,
       totalLPPendingRewards,
     } as Totals,
     stakers,
@@ -148,10 +138,13 @@ const getStakers = async () => {
     },
   );
 
+  // If there is an error in the query process, halt the execution
+  if (response.error) throw response.error;
+
   const stakers : Array<string> = [];
 
-  while(response.data.accounts.length > 0) {
-    for(const account of response.data.accounts) {
+  while (response.data.accounts.length > 0) {
+    for (const account of response.data.accounts) {
       stakers.push(account.id);
     }
 
@@ -182,7 +175,7 @@ const main = async () => {
   let stakers = Array<string>();
 
   // When we decide on a snapshot timestamp, get this list again to be sure we have latest
-  if (fs.existsSync("output/stakers.json")) {
+  if (!fs.existsSync("output/stakers.json")) { // TODO local file writes will be replaced when DB connection is setup
     stakers = await getStakers();
     fs.writeFileSync("output/stakers.json", JSON.stringify(stakers, undefined, 2));
     console.log("Total # of stakers: ", stakers.length);
@@ -193,7 +186,7 @@ const main = async () => {
   console.log("Total # of stakers: ", stakers.length);
   console.log("Starting...");
 
-  const [ results, stakersMap ] = await getStakesInPool(
+  const [results, stakersMap] = await getStakesInPool(
     stakers,
     wildPool,
     lpPool,
@@ -207,11 +200,19 @@ const main = async () => {
   for (const entry of stakersMap.entries()) {
     const account = entry[1];
 
-    const wildAmountOwed = BigInt(account.amountStakedWILD) + BigInt(account.amountStakedWILDYield) + BigInt(account.pendingYieldRewardsWILD);
+    const wildAmountOwed =
+      BigInt(account.amountStakedWILD) +
+      BigInt(account.amountStakedWILDYield) +
+      BigInt(account.pendingYieldRewardsWILD) +
+      BigInt(account.pendingYieldRewardsLP);
+
     const lpAmountOwed = BigInt(account.amountStakedLP);
 
     if (wildAmountOwed > 0n || lpAmountOwed > 0n) {
       merkleData.push([account.user, wildAmountOwed.toString(), lpAmountOwed.toString()]);
+    } else {
+      // Remove any stakers who have 0 owed balances to keep data in sync
+      stakersMap.delete(account.user);
     }
   }
 
@@ -219,8 +220,12 @@ const main = async () => {
   const balanceOfLpPool = await lpToken.balanceOf(await lpPool.getAddress());
 
   // Validate the aggregate values against the contract balances
-  expect(balanceOfWildPool).to.eq(results.totalWildStaked);
-  expect(balanceOfLpPool).to.eq(results.totalLPStaked);
+  assert.equal(balanceOfWildPool, results.totalWildStaked);
+  assert.equal(balanceOfLpPool, results.totalLPStaked);
+
+  // As the WILD from LP reward claims are restaked in the WILD pool,
+  // this value should always be 0
+  assert.equal(results.totalLPYield, 0n);
 
   console.log("Total Wild Staked: ", results.totalWildStaked.toString());
   console.log("Total Wild Yield: ", results.totalWildYield.toString());
@@ -228,7 +233,7 @@ const main = async () => {
   console.log("Balance of Wild Pool: ", balanceOfWildPool.toString());
 
   console.log("Total LP Staked: ", results.totalLPStaked.toString());
-  console.log("Total LP Yield: ", results.totalWildLPYield.toString());
+  console.log("Total LP Yield: ", results.totalLPYield.toString());
   console.log("Total LP Rewards: ", results.totalLPPendingRewards.toString());
   console.log("Balance of LP Pool: ", balanceOfLpPool.toString());
 
@@ -238,7 +243,7 @@ const main = async () => {
     totalWildPendingRewards: results.totalWildPendingRewards.toString(),
     balanceOfWildPool: balanceOfWildPool.toString(),
     totalLPStaked: results.totalLPStaked.toString(),
-    totalWildLPYield: results.totalWildLPYield.toString(),
+    totalLPYield: results.totalLPYield.toString(),
     totalLPPendingRewards: results.totalLPPendingRewards.toString(),
     balanceOfLpPool: balanceOfLpPool.toString(),
   };
