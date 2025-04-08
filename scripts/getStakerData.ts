@@ -139,7 +139,7 @@ const getStakers = async () => {
   );
 
   // If there is an error in the query process, halt the execution
-  if (response.error) throw response.error;
+  if (response.errors) throw response.errors;
 
   const stakers : Array<string> = [];
 
@@ -157,6 +157,8 @@ const getStakers = async () => {
         skip,
       },
     );
+
+    if (response.errors) throw response.errors;
   }
 
   return stakers;
