@@ -1,6 +1,6 @@
 import { accountInfoQuery } from "./helpers/queries";
-import { createClient, sendQuery } from "./subgraph";
-import { BaseArgs } from "./subgraph/types";
+import { createClient, sendQuery } from "../src/subgraph";
+import { BaseArgs } from "../src/subgraph/types";
 import {
   MockCorePool,
   MockCorePool__factory,
@@ -11,13 +11,17 @@ import { Contract } from "ethers";
 import * as hre from "hardhat";
 import * as fs from "fs";
 import * as artifact from "./helpers/uniswap_v2_token_abi.json";
-import { AccountAmount, Totals, UserStake } from "./types";
+import { AccountAmount, MerkleData, Totals, UserStake } from "./types";
 import { LP_POOL_ADDRESS, LP_TOKEN_ADDRESS, WILD_POOL_ADDRESS, WILD_TOKEN_ADDRESS } from "./helpers/constants";
 import assert from "assert";
+import { getMongoAdapter } from "../src/mongo/mongo";
+import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
+import { OptionalId } from "mongodb";
 
 
 const getStakesByUser = async (
-  pool : MockCorePool, account : string,
+  pool : MockCorePool,
+  account : string,
 ) : Promise<UserStake> => {
   const depositsLength = await pool.getDepositsLength(account);
 
@@ -53,6 +57,7 @@ const getStakesInPool = async (
 
   const stakers = new Map<string, AccountAmount>();
 
+  // We want to keep track of total data to be sure it matches sum from each user
   let totalWildStaked = 0n;
   let totalWildYield = 0n;
 
@@ -80,27 +85,41 @@ const getStakesInPool = async (
       lpAmounts,
     ] = await Promise.all(promises) as unknown as [bigint, bigint, UserStake, UserStake];
 
+    // Account must be unique
     if (!stakers.has(account)) {
-      stakers.set(account, {
-        user: account,
-        amountStakedWILD: wildAmounts.amount.toString(),
-        amountStakedWILDYield: wildAmounts.yieldAmount.toString(),
-        amountStakedLP: lpAmounts.amount.toString(),
-        pendingYieldRewardsWILD: pendingYieldRewardsWild.toString(),
-        pendingYieldRewardsLP: pendingYieldRewardsLP.toString(),
-      });
+      if (
+        // Account must have balance owed to be added to stakers map
+        wildAmounts.amount > 0n ||
+        wildAmounts.yieldAmount > 0n ||
+        lpAmounts.amount > 0n ||
+        lpAmounts.yieldAmount > 0n
+      ) {
+        stakers.set(account, {
+          user: account,
+          amountStakedWILD: wildAmounts.amount.toString(),
+          amountStakedWILDYield: wildAmounts.yieldAmount.toString(),
+          amountStakedLP: lpAmounts.amount.toString(),
+          pendingYieldRewardsWILD: pendingYieldRewardsWild.toString(),
+          pendingYieldRewardsLP: pendingYieldRewardsLP.toString(),
+        });
 
-      totalWildStaked += wildAmounts.amount;
-      totalWildYield += wildAmounts.yieldAmount;
-      totalWildPendingRewards += pendingYieldRewardsWild;
+        totalWildStaked += wildAmounts.amount;
+        totalWildYield += wildAmounts.yieldAmount;
+        totalWildPendingRewards += pendingYieldRewardsWild;
 
-      totalLPStaked += lpAmounts.amount;
-      totalLPYield += lpAmounts.yieldAmount;
-      totalLPPendingRewards += pendingYieldRewardsLP;
+        totalLPStaked += lpAmounts.amount;
+        totalLPYield += lpAmounts.yieldAmount;
+        totalLPPendingRewards += pendingYieldRewardsLP;
+      } else {
+        // If staker has no balance remaining in contract, pending yield should be 0
+        assert.ok(pendingYieldRewardsWild === 0n);
+        assert.ok(pendingYieldRewardsLP === 0n);
+      }
     } else {
-      throw Error(`Duplicate account found: ${account}`)
+      throw Error(`Duplicate account found: ${account}`);
     }
 
+    // To track progress as we go log here
     console.log("Processed: ", i);
   }
 
@@ -114,7 +133,7 @@ const getStakesInPool = async (
       totalLPPendingRewards,
     } as Totals,
     stakers,
-  ]
+  ];
 };
 
 const getStakers = async () => {
@@ -175,13 +194,25 @@ const main = async () => {
   let stakers = Array<string>();
 
   // When we decide on a snapshot timestamp, get this list again to be sure we have latest
-  if (!fs.existsSync("output/stakers.json")) { // TODO local file writes will be replaced when DB connection is setup
+  if (!fs.existsSync("output/stakers.json")) {
     stakers = await getStakers();
     fs.writeFileSync("output/stakers.json", JSON.stringify(stakers, undefined, 2));
-    console.log("Total # of stakers: ", stakers.length);
   } else {
     stakers = JSON.parse(fs.readFileSync("output/stakers.json").toString());
   }
+
+  const documents : Array<OptionalId<Document>> = [];
+
+  for(const staker of stakers) {
+    documents.push({ address: staker } as unknown as OptionalId<Document>);
+  }
+
+  const dbName = "staking-migration";
+  let client = (await getMongoAdapter()).db(dbName);
+
+  // To avoid duplicate data, we clear the DB before any inserts
+  await client.dropCollection("stakers");
+  await client.collection("stakers").insertMany(documents);
 
   console.log("Total # of stakers: ", stakers.length);
   console.log("Starting...");
@@ -193,13 +224,10 @@ const main = async () => {
   );
 
   // user address, wild amount, LP amount
-  type MerkleData = [string, string, string];
-  const merkleData: Array<MerkleData> = [];
+  const merkleData : Array<MerkleData> = [];
 
   // Turn into merkle data format needed
-  for (const entry of stakersMap.entries()) {
-    const account = entry[1];
-
+  for (const [, account] of stakersMap.entries()) {
     const wildAmountOwed =
       BigInt(account.amountStakedWILD) +
       BigInt(account.amountStakedWILDYield) +
@@ -210,7 +238,9 @@ const main = async () => {
 
     if (wildAmountOwed > 0n || lpAmountOwed > 0n) {
       merkleData.push([account.user, wildAmountOwed.toString(), lpAmountOwed.toString()]);
+
     } else {
+      console.log("Staker with 0 values found: ", account.user);
       // Remove any stakers who have 0 owed balances to keep data in sync
       stakersMap.delete(account.user);
     }
@@ -227,31 +257,61 @@ const main = async () => {
   // this value should always be 0
   assert.equal(results.totalLPYield, 0n);
 
-  console.log("Total Wild Staked: ", results.totalWildStaked.toString());
-  console.log("Total Wild Yield: ", results.totalWildYield.toString());
-  console.log("Total Wild Pending Rewards: ", results.totalWildPendingRewards.toString());
-  console.log("Balance of Wild Pool: ", balanceOfWildPool.toString());
+  // Refresh connection after long running call `getStakesInPool` above
+  client = (await getMongoAdapter()).db(dbName);
 
-  console.log("Total LP Staked: ", results.totalLPStaked.toString());
-  console.log("Total LP Yield: ", results.totalLPYield.toString());
-  console.log("Total LP Rewards: ", results.totalLPPendingRewards.toString());
-  console.log("Balance of LP Pool: ", balanceOfLpPool.toString());
+  // Always drop and recreate the collection if executing follow up runs to avoid data duplication
+  await client.dropCollection("metrics");
+  await client.collection("metrics").insertOne(
+    {
+      timestamp: Date.now(),
+      totalWildStaked: results.totalWildStaked.toString(),
+      totalWildYield: results.totalWildYield.toString(),
+      totalWildPendingRewards: results.totalWildPendingRewards.toString(),
+      balanceOfWildPool: balanceOfWildPool.toString(),
+      totalLPStaked: results.totalLPStaked.toString(),
+      totalLPYield: results.totalLPYield.toString(),
+      totalLPPendingRewards: results.totalLPPendingRewards.toString(),
+      balanceOfLpPool: balanceOfLpPool.toString(),
+    }
+  );
 
-  const output = {
-    totalWildStaked: results.totalWildStaked.toString(),
-    totalWildYield: results.totalWildYield.toString(),
-    totalWildPendingRewards: results.totalWildPendingRewards.toString(),
-    balanceOfWildPool: balanceOfWildPool.toString(),
-    totalLPStaked: results.totalLPStaked.toString(),
-    totalLPYield: results.totalLPYield.toString(),
-    totalLPPendingRewards: results.totalLPPendingRewards.toString(),
-    balanceOfLpPool: balanceOfLpPool.toString(),
-  };
+  // Create merkle tree from user staking data and write it to DB
+  const merkleTree = StandardMerkleTree.of(merkleData, ["address", "uint256", "uint256"]);
 
-  // Output merkle data as well as totals for verification
-  fs.writeFileSync("output/merkle_data.json", JSON.stringify(merkleData, undefined, 2));
-  fs.writeFileSync("output/totals.json", JSON.stringify(output, undefined, 2));
-  fs.writeFileSync("output/allStakers.json", JSON.stringify(Array.from(stakersMap), undefined, 2));
+  const collectionName = "stakers-merkle-data";
+  await client.dropCollection(collectionName);
+
+  // Insert the merkle tree root ahead of leaf data
+  await client.collection(collectionName).insertOne(
+    {
+      timestamp: Date.now(),
+      merkleRoot: merkleTree.root,
+    }
+  );
+
+  const leafDocuments : Array<OptionalId<Document>> = [];
+  for (const leaf of merkleData) {
+    // Each leaf is `[user, wildAmountOwed, lpAmountOwed]`
+    const proof = merkleTree.getProof([leaf[0], leaf[1], leaf[2]]);
+
+    // Confirm the data is verifiable by the merkle tree
+    assert.ok(merkleTree.verify([leaf[0], leaf[1], leaf[2]], proof));
+
+    leafDocuments.push(
+      {
+        user: leaf[0],
+        wildAmountOwed: leaf[1],
+        lpAmountOwed: leaf[2],
+        merkleProof: merkleTree.getProof([leaf[0], leaf[1], leaf[2]]),
+      } as unknown as OptionalId<Document>
+    );
+  }
+
+  // Send formatted staker merkle data
+  await client.collection(collectionName).insertMany(leafDocuments);
+
+  console.log("Finished processing");
 };
 
 main().then(() => process.exit(0))
