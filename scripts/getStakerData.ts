@@ -207,8 +207,12 @@ const main = async () => {
     documents.push({ address: staker } as unknown as OptionalId<Document>);
   }
 
-  const dbName = "staking-migration";
-  let client = (await getMongoAdapter()).db(dbName);
+  const dbName = "zns-domain-migration";
+  const uri = process.env.MONGO_DB_URI_WRITE;
+
+  if (!uri) throw Error("No connection string provided");
+
+  let client = (await getMongoAdapter(uri)).db(dbName);
 
   // To avoid duplicate data, we clear the DB before any inserts
   await client.dropCollection("stakers");
