@@ -20,3 +20,5 @@ export interface Totals {
   totalLPYield : bigint;
   totalLPPendingRewards : bigint;
 }
+
+export type MerkleData = [string, string, string];
